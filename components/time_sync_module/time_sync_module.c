@@ -13,5 +13,10 @@ int index_of_node(mac_addr_t * nodes, size_t nodes_size, mac_addr_t node_id){
 }  
 
 cJSON * handle_ack(cJSON * payload, uint32_t seq){
+    if(data_queue == NULL){
+        return NULL;
+    }
+    xQueueReceive(data_queue, payload, 0);
+    cJSON_Delete(payload);
     return NULL;
 }

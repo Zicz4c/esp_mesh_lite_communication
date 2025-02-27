@@ -1,5 +1,11 @@
 #include "time_sync_module.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* all functions, structs etc. */
+
 esp_err_t add_time_sync_root_action_callbacks();
 
 esp_err_t send_first_sync_time();
@@ -20,3 +26,7 @@ cJSON * handle_node_first_sync_time(cJSON * payload, uint32_t seq);
 /// @return 
 cJSON * handle_node_sync_time_w_delay(cJSON * payload, uint32_t seq);
 cJSON * handle_node_sync_time(cJSON * payload, uint32_t seq);
+
+#ifdef __cplusplus
+}
+#endif

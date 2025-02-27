@@ -19,6 +19,9 @@ esp_mesh_lite_msg_action_t time_sync_node_callbacks[] = {
 mac_addr_t own_mac;
 
 esp_err_t add_time_sync_node_action_callbacks(){
+    if(data_queue == NULL){
+        data_queue = xQueueCreate(100, sizeof(cJSON *));
+    }
     esp_wifi_get_mac(ESP_IF_WIFI_STA, own_mac.addr);
     return esp_mesh_lite_msg_action_list_register(time_sync_node_callbacks);
 }
@@ -74,6 +77,7 @@ cJSON * handle_first_sync_time(cJSON * payload, uint32_t seq){
     ESP_LOGI(TAG, "Handle first sync message");
 
     send_json_message(TIME_SYNC_NODE_FIRST_MESSAGE, TIME_SYNC_NODE_FIRST_MESSAGE_ACK, 0,  data, esp_mesh_lite_send_msg_to_root);
+    xQueueSend(data_queue, &data, 0);
     return NULL;
 }
 
@@ -128,6 +132,7 @@ cJSON * handle_root_sync_time(cJSON * payload, uint32_t seq){
     }
     
     send_json_message(TIME_SYNC_WITH_DELAY_MESSAGE, TIME_SYNC_WITH_DELAY_MESSAGE_ACK, 0,  data, esp_mesh_lite_send_msg_to_root);
+    xQueueSend(data_queue, &data, 0);
     return NULL;
 }
 
@@ -165,6 +170,7 @@ cJSON * handle_root_corrected_time(cJSON * payload, uint32_t seq){
     }
     
     send_json_message(TIME_SYNC_MESSAGE, TIME_SYNC_MESSAGE_ACK, 0,  data, esp_mesh_lite_send_msg_to_root);
+    xQueueSend(data_queue, &data, 0);
     return NULL;
 }
 

@@ -52,10 +52,12 @@ void handle_timeout(TimerHandle_t timer)
 }
 
 esp_err_t add_time_sync_root_action_callbacks()
-{
+{   
+    if(data_queue == NULL){
+        data_queue = xQueueCreate(100, sizeof(cJSON *));
+    }
     if (resync_queue == NULL)
     {
-
         resync_queue = xQueueCreate(64, sizeof(uint8_t));
     }
     if (timeout_timer == NULL)
@@ -98,7 +100,14 @@ esp_err_t send_first_sync_time()
     cJSON_AddNumberToObject(data, JSON_US, t_r.tv_usec);
 
     ESP_LOGI(TAG, "Sending first sync message %s", cJSON_Print(data));
-    return send_json_message(TIME_SYNC_FIRST_MESSAGE, TIME_SYNC_FIRST_MESSAGE_ACK, 0, data, esp_mesh_lite_send_broadcast_msg_to_child);
+    esp_err_t result = send_json_message(TIME_SYNC_FIRST_MESSAGE, TIME_SYNC_FIRST_MESSAGE_ACK, 0, data, esp_mesh_lite_send_broadcast_msg_to_child);
+    if(result != ESP_OK){
+        cJSON_Delete(data);
+        
+    }else{
+        xQueueSend(data_queue, &data, 0);
+    }
+    return result;
 }
 
 static cJSON *time_w_delay_data;
@@ -384,6 +393,7 @@ cJSON *handle_node_sync_time(cJSON *payload, uint32_t seq)
         node_sync_current_seq = 0;
         // send_json_message(TIME_SYNC_ROOT_TIME_MESSAGE, TIME_SYNC_ROOT_TIME_MESSAGE_ACK,
         //                   0, time_to_sync, esp_mesh_lite_send_broadcast_msg_to_child);
+        
         // send_first_sync_time();
     }
     else if (node_sync_num_of_responses < num_of_known_child_nodes)

@@ -7,6 +7,7 @@
 #include "esp_wifi.h"
 #include "esp_mac.h"
 #include "esp_mesh_lite.h"
+#include "freertos/queue.h"
 
 #define MAX_MESH_NODES 50
 #define TIME_SYNC_FIRST_MESSAGE "first_time"
@@ -33,13 +34,22 @@
 #define JSON_MAC "mac"
 #define JSON_SEQ "seq"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+static QueueHandle_t data_queue = NULL;
+
 typedef struct delay_t {
     int32_t s;
     int32_t us;
 } delay_t;
 
+
 cJSON * handle_ack(cJSON * payload, uint32_t seq);
 
-esp_err_t add_time_sync_node_action_callbacks();
-
 int index_of_node(mac_addr_t * nodes, size_t nodes_size, mac_addr_t node_id);
+
+
+#ifdef __cplusplus
+}
+#endif
