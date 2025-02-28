@@ -7,11 +7,24 @@
 #include <nvs_flash.h>
 #include "WiFi.h"
 #include <esp_wifi.h>
+#include "FreeRTOS/Queue.h"
 
-//#define IS_ROOT 1
+#include "time_sync_root.h"
+#include "time_sync_node.h"
 
-void app_wifi_set_softap_info(void)
-{
+#define IS_ROOT 1
+
+#define define_edge(x)                 \
+    static bool m_##x;                 \
+    const bool x##_edge = x && !m_##x; \
+    m_##x = x;
+
+
+// Queue for memeory management
+QueueHandle_t send_data_queue;
+static size_t queue_size = 0;
+
+void app_wifi_set_softap_info(void){
     char softap_ssid[32];
     uint8_t softap_mac[6];
     esp_wifi_get_mac(WIFI_IF_AP, softap_mac);
@@ -54,6 +67,8 @@ void test_communcation(TimerHandle_t timer){
 #else
     esp_mesh_lite_try_sending_msg("test", "test_ack", 2, data, esp_mesh_lite_send_msg_to_root);
 #endif
+    xQueueSend(send_data_queue, &data, 0);
+    queue_size++;
 }
 
 cJSON * receive_test(cJSON * payload, uint32_t seq){
@@ -68,6 +83,24 @@ cJSON * receive_test(cJSON * payload, uint32_t seq){
 
 cJSON * send_test_ack(cJSON * paylaod, uint32_t seq){
     Serial.printf("[main.c->send_test_ack] receive ack for packet %lu \n", seq );
+    cJSON* data;
+    if(xQueuePeek(send_data_queue, &data,0)){
+        cJSON * test = cJSON_GetObjectItem(data, "test");
+        if(strcmp(cJSON_GetStringValue(test), "test") == 0){
+            xQueueReceive(send_data_queue, &data, 0);
+            cJSON_Delete(data);
+            queue_size--;
+        }
+    }
+    
+    if(queue_size >= 100){
+        while(xQueueReceive(send_data_queue, &data, 0)){
+            cJSON_Delete(data);
+        }
+        xQueueReset(send_data_queue);
+        queue_size = 0;
+    }
+    
     return NULL;
 }
 
@@ -77,8 +110,7 @@ esp_mesh_lite_msg_action_t action[] = {
     {NULL, NULL, NULL}, //must be null terminated
 };
 
-static esp_err_t esp_storage_init(void)
-{
+static esp_err_t esp_storage_init(void){
     esp_err_t ret = nvs_flash_init();
 
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -92,14 +124,19 @@ static esp_err_t esp_storage_init(void)
 }
 
 void subscribe_to_messages(TimerHandle_t timer){
-    if(esp_mesh_lite_msg_action_list_register(action) != ESP_OK){
+    if(esp_mesh_lite_msg_action_list_register(action)   != ESP_OK 
+#if IS_ROOT
+    && add_time_sync_root_action_callbacks()        != ESP_OK 
+#else
+    && add_time_sync_node_action_callbacks()        != ESP_OK
+#endif
+    ){
         xTimerStop(timer, 0);
         xTimerDelete(timer, 0);
     }
 }
 
-static void wifi_init(void)
-{
+static void wifi_init(void){
     // Station
     wifi_config_t wifi_config;
     memset(&wifi_config, 0x0, sizeof(wifi_config_t));
@@ -111,8 +148,6 @@ static void wifi_init(void)
     wifi_config.ap.channel = 11;
     esp_bridge_wifi_set_config(WIFI_IF_AP, &wifi_config);
 }
-
-
 
 void mesh_init(){
     esp_storage_init();
@@ -131,24 +166,52 @@ void mesh_init(){
 #endif    
 }
 
-
+#if IS_ROOT
+void time_sync(TimerHandle_t timer)
+{
+    esp_err_t err = send_first_sync_time();
+    if(err != ESP_OK){
+        ESP_LOGE("main.c", "Failed to send first sync message, err: %d", err);
+    }
+}
+#endif
 // WIFI ERRORS: C:\_dev\esp\v5.3.2\esp-idf\components\esp_wifi\include\esp_wifi_types_generic.h
 extern "C" void app_main()
 {
     initArduino();
     pinMode(4, OUTPUT);
     digitalWrite(4, HIGH);
-    // Do your own thing
-    
+    pinMode(2, INPUT_PULLUP);
     Serial.begin(115200);
     
     mesh_init();
     esp_mesh_lite_start();
 
+    send_data_queue = xQueueCreate(100, sizeof(cJSON *));
+
     TimerHandle_t subscribe_to_msg_timer = xTimerCreate("subscribe_to_messages", 1000 / portTICK_PERIOD_MS, pdTRUE, NULL, subscribe_to_messages);
-    TimerHandle_t send_test_message_timer = xTimerCreate("send_test_message", 1000 / portTICK_PERIOD_MS, pdTRUE, NULL, test_communcation);
+    //TimerHandle_t send_test_message_timer = xTimerCreate("send_test_message", 1000 / portTICK_PERIOD_MS, pdTRUE, NULL, test_communcation);
     xTimerStart(subscribe_to_msg_timer, 5000);
-    xTimerStart(send_test_message_timer, 6000);
-     
-    //esp_mesh_lite_connect();
+    //xTimerStart(send_test_message_timer, 6000);
+#if IS_ROOT
+    TimerHandle_t time_sync_timer = xTimerCreate("time_sync", 20000 / portTICK_PERIOD_MS, true, NULL, &time_sync);
+    xTimerStart(time_sync_timer, 7000);
+#else
+    //esp_mesh_lite_try_sending_msg(TIME_SYNC_REQUEST, TIME_SYNC_FIRST_MESSAGE_ACK, 0, NULL, esp_mesh_lite_send_msg_to_root);
+#endif
+struct timeval t;
+//esp_mesh_lite_connect();
+while (1)
+{
+    int pin_pressed = digitalRead(2);
+    define_edge(pin_pressed);
+    if (pin_pressed_edge)
+    {
+            gettimeofday(&t, NULL); 
+            Serial.printf("Button pressed: %llu:%06lu\n", t.tv_sec, t.tv_usec);
+            //esp_mesh_lite_try_sending_msg("test", "test_ack", 0, NULL, esp_mesh_lite_send_broadcast_msg_to_child);
+        }
+        vTaskDelay(1 / portTICK_PERIOD_MS);
+    }
+    
 }

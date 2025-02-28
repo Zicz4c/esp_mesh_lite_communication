@@ -492,6 +492,6 @@ direct_dependencies:
 - espressif/arduino-esp32
 - espressif/mesh_lite
 - idf
-manifest_hash: 83eced82607ea718ab015b3de8499f43025cb9824d08110dc6c8f29eb1695dc0
+manifest_hash: 8495cea69bb6cc82fd1e3b1fa6d74864323d66cb1cc3456b0fd336db8b9c4744
 target: esp32c6
 version: 2.0.0
