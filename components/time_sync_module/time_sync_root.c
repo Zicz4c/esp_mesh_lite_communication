@@ -81,16 +81,21 @@ void count_responses(uint32_t *curren_seq, uint32_t recv_seq, uint8_t *num_of_re
     //  count responses, so we can controll the amount of broadcasts send
     if (*curren_seq == 0 || *curren_seq == recv_seq)
     {
-        if (*curren_seq == 0 || data_array == NULL)
+        cJSON * delay_array;
+        ESP_LOGI(TAG, "[count_responses] seq: %lu | recv_seq: %lu", *curren_seq, recv_seq);
+        if (data_array != NULL && (*curren_seq == 0 || *data_array == NULL) )
         {
-            if (*data_array == NULL)
-                *data_array = cJSON_CreateArray();
+            if (*data_array == NULL){
+                
+                *data_array = cJSON_CreateObject();
+                delay_array = cJSON_AddArrayToObject(*data_array, JSON_D);
+            }
             else
             {
-                size_t size = cJSON_GetArraySize(*data_array);
+                size_t size = cJSON_GetArraySize(delay_array);
                 for (size_t i = 0; i < size; i++)
                 {
-                    cJSON_DeleteItemFromArray(*data_array, i);
+                    cJSON_DeleteItemFromArray(delay_array, i);
                 }
             }
         }
@@ -106,7 +111,7 @@ uint32_t get_seq_from_json(cJSON *json)
     return (uint32_t)cJSON_GetNumberValue(msg_seq);
 }
 
-void add_time_to_data_array(cJSON **array, size_t num_of_nodes)
+void add_delays_to_data_array(cJSON **array, size_t num_of_nodes, delay_t * delays)
 {
     struct timeval t_r;
     for (size_t i = 0; i < num_of_nodes; i++)
@@ -116,9 +121,10 @@ void add_time_to_data_array(cJSON **array, size_t num_of_nodes)
             continue;
         }
         cJSON *data = node_data[i];
+        delay_t d = delays[i];
         gettimeofday(&t_r, NULL);
-        cJSON_AddNumberToObject(data, JSON_S, t_r.tv_sec);
-        cJSON_AddNumberToObject(data, JSON_US, t_r.tv_usec);
+        cJSON_AddNumberToObject(data, JSON_D_RN_S, d.s);
+        cJSON_AddNumberToObject(data, JSON_D_RN_US, d.us);
         if (*array == NULL)
         {
             *array = cJSON_CreateArray();
@@ -130,7 +136,7 @@ void add_time_to_data_array(cJSON **array, size_t num_of_nodes)
 esp_err_t send_first_sync_time()
 {
     struct timeval t_r;
-
+    
     uint32_t num_of_known_nodes = 0;
     if (timeout_occured && num_of_known_child_nodes > 0)
     {
@@ -167,7 +173,9 @@ esp_err_t send_first_sync_time()
     else
     {
         // send to queue, so memory can be freed after ack
-        xQueueSend(data_queue, &data, 0);
+        if(data_queue != NULL){
+            xQueueSend(data_queue, &data, 0);
+        }
     }
     return result;
 }
@@ -229,6 +237,7 @@ cJSON *handle_node_first_sync_time(cJSON *payload, uint32_t seq)
     // }
     //  ESP_LOGI(TAG, "Delay: %ld.%06ld", d.s, d.us);
     //   save delay of node
+    
     node_delays[id_index] = d;
 
     cJSON *time_to_sync = cJSON_CreateObject();
@@ -236,12 +245,7 @@ cJSON *handle_node_first_sync_time(cJSON *payload, uint32_t seq)
     // cJSON_AddNumberToObject(time_to_sync, JSON_US, t_r.tv_usec);
     cJSON_AddNumberToObject(time_to_sync, JSON_D_US, d.us);
     cJSON_AddNumberToObject(time_to_sync, JSON_D_S, d.s);
-    cJSON *data_mac = cJSON_AddArrayToObject(time_to_sync, JSON_MAC);
-    for (size_t i = 0; i < MAC_ADDR_SIZE; i++)
-    {
-        cJSON *mac_part = cJSON_CreateNumber(mac.addr[i]);
-        cJSON_AddItemToArray(data_mac, mac_part);
-    }
+    cJSON *data_mac = add_mac_to_json(time_to_sync, mac);
     // collect all responses before sending new time
     ESP_LOGI(TAG, "[handle_node_first_sync_time] num of responses: %d/%d", first_sync_num_of_responses, num_of_known_child_nodes);
     node_data[id_index] = time_to_sync;
@@ -249,9 +253,10 @@ cJSON *handle_node_first_sync_time(cJSON *payload, uint32_t seq)
     if (first_sync_num_of_responses >= num_of_known_child_nodes)
     {
         add_time_to_data_array(&time_w_delay_data, num_of_known_child_nodes);
+        
         // ESP_LOGI(TAG, "[handle_node_first_sync_time] json: %s", cJSON_Print(time_w_delay_data));
         xTimerStop(timeout_timer, 0);
-        send_json_message(TIME_SYNC_ROOT_TIME_MESSAGE, TIME_SYNC_ROOT_TIME_MESSAGE, 0, time_w_delay_data, esp_mesh_lite_send_broadcast_msg_to_child);
+        //send_json_message(TIME_SYNC_ROOT_TIME_MESSAGE, TIME_SYNC_ROOT_TIME_MESSAGE, 0, time_w_delay_data, esp_mesh_lite_send_broadcast_msg_to_child);
         first_sync_current_seq = 0;
         first_sync_num_of_responses = 0;
         for (size_t i = 0; i < cJSON_GetArraySize(time_w_delay_data); i++)
@@ -259,6 +264,20 @@ cJSON *handle_node_first_sync_time(cJSON *payload, uint32_t seq)
             //cJSON_Delete(node_data[i]);
             cJSON_DeleteItemFromArray(time_w_delay_data, i);
             node_data[i] = NULL;
+            delay_t delay;
+            delay.s = node_delays[i].s;
+            delay.us = node_delays[i].us;
+            if (delay.s == 1)
+            {
+                 int64_t d_us = delay.s * 1000000 + (delay.s > 0 ? delay.us : -delay.us);
+                 if (d_us < 1000000 && d_us > 0)
+                 {
+                     delay.us = d_us;
+                     delay.s = 0;
+                 }
+             }
+            ESP_LOGI(TAG, "[handle_node_first_sync_time] "MACSTR" => %ld.%ld", MAC2STR(nodes[i].addr), delay.s , delay.us);
+            ESP_LOGI(TAG, "[handle_node_first_sync_time] time => %ld.%06ld", s + node_delays[i].s, us + node_delays[i].us);
         }
     }
     else
@@ -290,12 +309,8 @@ cJSON *handle_node_sync_time_w_delay(cJSON *payload, uint32_t seq)
     // ESP_LOGI(TAG, "recv_seq: %lu", recv_seq);
 
     //  count responses, so we can controll the amount of broadcasts send
-    if (delay_sync_current_seq == 0 || delay_sync_current_seq == recv_seq)
-    {
-        delay_sync_current_seq = recv_seq;
-        delay_sync_num_of_responses++;
-        // ESP_LOGI(TAG, "incr delay sync num of responses: %d", delay_sync_num_of_responses);
-    }
+    count_responses(&delay_sync_current_seq, recv_seq, &delay_sync_num_of_responses, &root_corrected_data);
+
 
     // parse data
     cJSON *recv_us = cJSON_GetObjectItem(payload, JSON_US);
@@ -345,20 +360,15 @@ cJSON *handle_node_sync_time_w_delay(cJSON *payload, uint32_t seq)
     node_delays[id_index] = d_nr;
     cJSON *time_to_sync = cJSON_CreateObject();
     gettimeofday(&t_r, NULL);
-    cJSON_AddNumberToObject(time_to_sync, JSON_S, t_r.tv_sec + d_nr.s);
-    cJSON_AddNumberToObject(time_to_sync, JSON_US, t_r.tv_usec + d_nr.us);
-    cJSON *data_mac = cJSON_AddArrayToObject(time_to_sync, JSON_MAC);
-    for (size_t i = 0; i < MAC_ADDR_SIZE; i++)
-    {
-        cJSON *mac_part = cJSON_CreateNumber(mac.addr[i]);
-        cJSON_AddItemToArray(data_mac, mac_part);
-    }
-    cJSON_AddItemToArray(root_corrected_data, time_to_sync);
+    //cJSON_AddNumberToObject(time_to_sync, JSON_S, t_r.tv_sec + d_nr.s);
+    //cJSON_AddNumberToObject(time_to_sync, JSON_US, t_r.tv_usec + d_nr.us);
+    cJSON *data_mac = add_mac_to_json(time_to_sync, mac);
     node_data[id_index] = time_to_sync;
     // ESP_LOGI(TAG, "num of responses: %d/%d", delay_sync_num_of_responses, num_of_known_child_nodes);
     if (delay_sync_num_of_responses >= num_of_known_child_nodes)
     {
         // ESP_LOGI(TAG, "[handle_node_sync_time_w_delay] json: %s", cJSON_Print(root_corrected_data));
+        add_delays_to_data_array(&root_corrected_data, num_of_known_child_nodes, node_delays);
 
         send_json_message(TIME_SYNC_ROOT_CORRECTED_TIME_MESSAGE, TIME_SYNC_ROOT_CORRECTED_TIME_MESSAGE_ACK,
                           0, root_corrected_data, esp_mesh_lite_send_broadcast_msg_to_child);
@@ -395,6 +405,8 @@ cJSON *handle_node_sync_time(cJSON *payload, uint32_t seq)
     uint32_t recv_seq = (uint32_t)cJSON_GetNumberValue(msg_seq);
     // ESP_LOGI(TAG, "recv_seq: %lu", recv_seq);
     //  count responses, so we can controll the amount of broadcasts send
+    count_responses(&node_sync_current_seq, recv_seq, &node_sync_num_of_responses, NULL);
+
     if (node_sync_current_seq == 0 || node_sync_current_seq == recv_seq)
     {
         node_sync_current_seq = recv_seq;

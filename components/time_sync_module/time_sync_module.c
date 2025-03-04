@@ -21,3 +21,13 @@ cJSON * handle_ack(cJSON * payload, uint32_t seq){
     cJSON_Delete(data);
     return NULL;
 }
+
+cJSON * add_mac_to_json(cJSON * target, mac_addr_t mac){
+    cJSON * data_mac = cJSON_AddArrayToObject(target, JSON_MAC);
+    for (size_t i = 0; i < MAC_ADDR_SIZE; i++)
+    {   
+        cJSON * mac_part = cJSON_CreateNumber(mac.addr[i]);
+        cJSON_AddItemToArray(data_mac, mac_part);
+    }
+    return data_mac;
+}

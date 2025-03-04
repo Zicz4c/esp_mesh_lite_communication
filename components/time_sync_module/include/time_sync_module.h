@@ -27,6 +27,7 @@
 #define TIME_SYNC_REQUEST_ACK "request_time_sync_ack"
 #define JSON_S "s"
 #define JSON_US "us"
+#define JSON_D "d"
 #define JSON_D_S "d_s"
 #define JSON_D_RN_S "d_rn_s"
 #define JSON_D_US "d_us"
@@ -48,6 +49,8 @@ typedef struct delay_t {
 cJSON * handle_ack(cJSON * payload, uint32_t seq);
 
 int index_of_node(mac_addr_t * nodes, size_t nodes_size, mac_addr_t node_id);
+
+cJSON * add_mac_to_json(cJSON * target, mac_addr_t mac);
 
 
 #ifdef __cplusplus

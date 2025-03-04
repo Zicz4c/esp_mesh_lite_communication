@@ -47,15 +47,7 @@ cJSON * get_json_item_for_mac(mac_addr_t mac, cJSON * data){
     return NULL;
 }
 
-cJSON * add_mac_to_json(cJSON * target, mac_addr_t mac){
-    cJSON * data_mac = cJSON_AddArrayToObject(target, JSON_MAC);
-    for (size_t i = 0; i < MAC_ADDR_SIZE; i++)
-    {   
-        cJSON * mac_part = cJSON_CreateNumber(mac.addr[i]);
-        cJSON_AddItemToArray(data_mac, mac_part);
-    }
-    return data_mac;
-}
+
 
 cJSON * handle_first_sync_time(cJSON * payload, uint32_t seq){
     send_json_message(TIME_SYNC_FIRST_MESSAGE, TIME_SYNC_FIRST_MESSAGE_ACK, 0, payload, esp_mesh_lite_send_broadcast_msg_to_child);
@@ -164,7 +156,7 @@ cJSON * handle_root_corrected_time(cJSON * payload, uint32_t seq){
     
     cJSON * data = cJSON_CreateObject() ;
 
-    cJSON * message_seq = cJSON_AddNumberToObject(payload, JSON_SEQ, seq);
+    cJSON * message_seq = cJSON_AddNumberToObject(data, JSON_SEQ, seq);
     //cJSON * data_mac = cJSON_AddArrayToObject(data, JSON_MAC);
     //mac_addr_t mac;
     if(own_mac.addr[0] == 0 ){
@@ -174,7 +166,7 @@ cJSON * handle_root_corrected_time(cJSON * payload, uint32_t seq){
     gettimeofday(&t_n, NULL);
     cJSON_AddNumberToObject(data, JSON_S, t_n.tv_sec);
     cJSON_AddNumberToObject(data, JSON_US, t_n.tv_usec);
-
+    ESP_LOGI(TAG, "[handle_root_corrected_time] Handle corrected time %llu.%06lu", t_n.tv_sec, t_n.tv_usec);
     send_json_message(TIME_SYNC_MESSAGE, TIME_SYNC_MESSAGE_ACK, 0,  data, esp_mesh_lite_send_msg_to_root);
     xQueueSend(data_queue, &data, 0);
     return NULL;
