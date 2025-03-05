@@ -28,6 +28,7 @@
 #define JSON_S "s"
 #define JSON_US "us"
 #define JSON_D "d"
+#define JSON_NODE_DATA "node_data"
 #define JSON_D_S "d_s"
 #define JSON_D_RN_S "d_rn_s"
 #define JSON_D_US "d_us"
@@ -48,9 +49,21 @@ typedef struct delay_t {
 
 cJSON * handle_ack(cJSON * payload, uint32_t seq);
 
-int index_of_node(mac_addr_t * nodes, size_t nodes_size, mac_addr_t node_id);
+/// @brief seaches the given array and returns the id of the node
+/// if the node is not found, it will be added to the array
+/// @param nodes 
+/// @param nodes_size 
+/// @param node_id 
+/// @return 
+int index_of_node(mac_addr_t * nodes, size_t * nodes_size, mac_addr_t node_id);
 
 cJSON * add_mac_to_json(cJSON * target, mac_addr_t mac);
+
+mac_addr_t read_mac_from_json(cJSON * json);
+
+void get_time_from_json(cJSON * json, int64_t * out_s, int32_t * out_us);
+
+void handle_delay_second_overflow(delay_t * d_rn);
 
 
 #ifdef __cplusplus

@@ -230,7 +230,7 @@ extern "C" void app_main()
     xTimerStart(subscribe_to_msg_timer, 5000);
     //xTimerStart(send_test_message_timer, 6000);
 #if IS_ROOT
-    TimerHandle_t time_sync_timer = xTimerCreate("time_sync", 3000 / portTICK_PERIOD_MS, true, NULL, &time_sync);
+    TimerHandle_t time_sync_timer = xTimerCreate("time_sync", 20000 / portTICK_PERIOD_MS, true, NULL, &time_sync);
     xTimerStart(time_sync_timer, 7000);
 #else
     // esp_mesh_lite_try_sending_msg(TIME_SYNC_REQUEST, TIME_SYNC_FIRST_MESSAGE_ACK, 0, NULL, esp_mesh_lite_send_msg_to_root);
