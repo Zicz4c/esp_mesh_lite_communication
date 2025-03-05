@@ -50,6 +50,11 @@ cJSON * get_json_item_for_mac(mac_addr_t mac, cJSON * data){
 
 
 cJSON * handle_first_sync_time(cJSON * payload, uint32_t seq){
+    cJSON *msg_seq = cJSON_GetObjectItem(payload, JSON_SEQ);
+    if(msg_seq == NULL){
+       msg_seq = cJSON_AddNumberToObject(payload, JSON_SEQ, seq);
+    }
+    uint32_t recv_seq = (uint32_t)cJSON_GetNumberValue(msg_seq);
     send_json_message(TIME_SYNC_FIRST_MESSAGE, TIME_SYNC_FIRST_MESSAGE_ACK, 0, payload, esp_mesh_lite_send_broadcast_msg_to_child);
     if(own_mac.addr[0] == 0 ){
         esp_wifi_get_mac(ESP_IF_WIFI_STA, own_mac.addr);
@@ -63,7 +68,7 @@ cJSON * handle_first_sync_time(cJSON * payload, uint32_t seq){
     settimeofday(&t_r, NULL);
     // create data for message to root
     cJSON * data = cJSON_CreateObject();
-    cJSON * message_seq = cJSON_AddNumberToObject(data, JSON_SEQ, seq);
+    cJSON * message_seq = cJSON_AddNumberToObject(data, JSON_SEQ, recv_seq);
     cJSON * data_mac = add_mac_to_json(data, own_mac);
     gettimeofday(&t_n, NULL); // get node time as late as possible
     cJSON * data_s = cJSON_AddNumberToObject(data, JSON_S, t_n.tv_sec);
@@ -131,6 +136,7 @@ cJSON * handle_root_corrected_time(cJSON * payload, uint32_t seq){
 
     send_json_message(TIME_SYNC_ROOT_CORRECTED_TIME_MESSAGE, TIME_SYNC_ROOT_CORRECTED_TIME_MESSAGE_ACK,
         0, payload, esp_mesh_lite_send_broadcast_msg_to_child);
+    
     cJSON * node_data = cJSON_GetObjectItem(payload, JSON_NODE_DATA);
     cJSON * item_for_mac = get_json_item_for_mac(own_mac, node_data);
     if(item_for_mac == NULL){
@@ -164,7 +170,7 @@ cJSON * handle_root_corrected_time(cJSON * payload, uint32_t seq){
     ESP_LOGI(TAG, "[handle_root_corrected_time] Time: %lld.%ld : %llu.%06lu", t_r.tv_sec, t_r.tv_usec,t_n.tv_sec, t_n.tv_usec);
     ESP_LOGI(TAG, "[handle_root_corrected_time] Diff: %lld.%ld ", t_r.tv_sec-t_n.tv_sec , t_r.tv_usec - t_n.tv_usec);
 
-    settimeofday(&t_r, NULL);
+    settimeofday(&t_n, NULL);
     
     cJSON * data = cJSON_CreateObject() ;
 

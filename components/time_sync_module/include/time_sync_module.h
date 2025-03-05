@@ -62,6 +62,7 @@ cJSON * add_mac_to_json(cJSON * target, mac_addr_t mac);
 mac_addr_t read_mac_from_json(cJSON * json);
 
 void get_time_from_json(cJSON * json, int64_t * out_s, int32_t * out_us);
+void get_delay_from_json(cJSON * json, delay_t * d);
 
 void handle_delay_second_overflow(delay_t * d_rn);
 

@@ -16,8 +16,6 @@ int index_of_node(mac_addr_t * nodes, size_t * nodes_size, mac_addr_t node_id){
     return id_index;
 }  
 
-
-
 cJSON * handle_ack(cJSON * payload, uint32_t seq){
     cJSON * data = NULL;
     if(data_queue == NULL){
@@ -56,6 +54,16 @@ void get_time_from_json(cJSON * json, int64_t * out_s, int32_t * out_us){
     *out_us = (int32_t)cJSON_GetNumberValue(recv_us);
     *out_s = (int32_t)cJSON_GetNumberValue(recv_s);
     ESP_LOGI(TAG, "[get_time_from_json] s: %lld | us: %ld", *out_s, *out_us);
+}
+
+void get_delay_from_json(cJSON * json, delay_t * d){
+    cJSON *recv_us = cJSON_GetObjectItem(json, JSON_D_RN_US);
+    cJSON *recv_s = cJSON_GetObjectItem(json, JSON_D_RN_S);
+
+    // get values from json
+    d->us = (int32_t)cJSON_GetNumberValue(recv_us);
+    d->s = (int32_t)cJSON_GetNumberValue(recv_s);
+    ESP_LOGI(TAG, "[get_delay_from_json] d.s: %ld | d.us: %ld", d->s, d->us);
 }
 
 void handle_delay_second_overflow(delay_t * d_rn){
