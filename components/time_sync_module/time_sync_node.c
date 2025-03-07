@@ -162,15 +162,16 @@ cJSON * handle_root_corrected_time(cJSON * payload, uint32_t seq){
     d_rn.us = (int)cJSON_GetNumberValue(recv_d_us);
 
     ESP_LOGI(TAG, "[handle_root_corrected_time] Delay: %ld.%06ld", d_rn.s, d_rn.us);
+    gettimeofday(&t_n, NULL); 
     t_r.tv_sec += d_rn.s;
     t_r.tv_usec += d_rn.us;
     t_n.tv_sec += d_rn.s;
     t_n.tv_usec += d_rn.us;
+    settimeofday(&t_n, NULL);
 
     ESP_LOGI(TAG, "[handle_root_corrected_time] Time: %lld.%ld : %llu.%06lu", t_r.tv_sec, t_r.tv_usec,t_n.tv_sec, t_n.tv_usec);
     ESP_LOGI(TAG, "[handle_root_corrected_time] Diff: %lld.%ld ", t_r.tv_sec-t_n.tv_sec , t_r.tv_usec - t_n.tv_usec);
 
-    settimeofday(&t_n, NULL);
     
     cJSON * data = cJSON_CreateObject() ;
 

@@ -1,5 +1,7 @@
 #include "time_sync_module.h"
 
+#define MAX_CONCURRENT_SEQUENCES 100
+
 #ifdef __cplusplus
 extern "C" {
 #endif
